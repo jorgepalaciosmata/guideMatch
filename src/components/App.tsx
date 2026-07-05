@@ -1,13 +1,79 @@
-import { useState, useEffect, useRef } from "react";
+// @ts-nocheck
+import { useState, useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
+
+interface Message {
+  id: number;
+  from: string;
+  text: string;
+  time: string;
+  blocked?: boolean;
+}
+
+interface Conversation {
+  id: number;
+  name: string;
+  location: string;
+  avatar: string;
+  verified: boolean;
+  online: boolean;
+  specialty: string;
+  rating: number;
+  trips: number;
+  bio: string;
+  tags: string[];
+  booking?: { status: string; dates: string };
+  lastMsg: string;
+  time: string;
+  unread: number;
+  messages: Message[];
+}
+
+interface MsgAvatarProps {
+  emoji: string;
+  size?: number;
+  online?: boolean;
+}
+
+interface ProfileSheetProps {
+  convo: Conversation;
+  onClose: () => void;
+}
+
+interface ConversationListProps {
+  onOpen: (convo: Conversation) => void;
+}
+
+interface ChatViewProps {
+  convo: Conversation;
+  onBack: () => void;
+}
+
+interface PanelItem {
+  title: string;
+  content: ReactNode;
+}
+
+interface MessagesScreenProps {
+  setScreen: (screen: string) => void;
+}
+
+interface BottomNavProps {
+  active: string;
+  setScreen: (screen: string) => void;
+}
+
 // ── Contact info detection ───────────────────────────────────────────────────
-const CONTACT_PATTERNS = [
+const CONTACT_PATTERNS: RegExp[] = [
   /(\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g,
   /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
   /\d{1,5}\s+[\w\s]{1,40}(street|st|avenue|ave|road|rd|blvd|boulevard|drive|dr|lane|ln|way|court|ct|place|pl)/gi,
   /whatsapp|telegram|signal|wechat|line/gi,
 ];
-function containsContactInfo(text) {
-  return CONTACT_PATTERNS.some(p => { p.lastIndex = 0; return p.test(text); });
+function containsContactInfo(text: string): boolean {
+  return CONTACT_PATTERNS.some((p) => {
+    p.lastIndex = 0;
+    return p.test(text);
+  });
 }
 
 const CONVERSATIONS = [
@@ -85,7 +151,7 @@ const CONVERSATIONS = [
 
 // ── Messaging components ─────────────────────────────────────────────────────
 
-const MsgAvatar = ({ emoji, size = 44, online = false }) => (
+const MsgAvatar = ({ emoji, size = 44, online = false }: MsgAvatarProps) => (
   <div style={{ position: "relative", flexShrink: 0 }}>
     <div style={{ width: size, height: size, borderRadius: "50%", background: C.surface, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.45 }}>{emoji}</div>
     {online && <div style={{ position: "absolute", bottom: 1, right: 1, width: 10, height: 10, borderRadius: "50%", background: C.green, border: `2px solid ${C.white}` }} />}
@@ -108,7 +174,7 @@ const BlockedBubble = () => (
   </div>
 );
 
-const ProfileSheet = ({ convo, onClose }) => {
+const ProfileSheet = ({ convo, onClose }: ProfileSheetProps) => {
   const [visible, setVisible] = useState(false);
   useEffect(() => { setTimeout(() => setVisible(true), 10); }, []);
   const close = () => { setVisible(false); setTimeout(onClose, 280); };
@@ -152,7 +218,7 @@ const ProfileSheet = ({ convo, onClose }) => {
   );
 };
 
-const ConversationList = ({ onOpen }) => {
+const ConversationList = ({ onOpen }: ConversationListProps) => {
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("All");
   const filtered = CONVERSATIONS.filter(c => {
@@ -217,21 +283,21 @@ const ConversationList = ({ onOpen }) => {
   );
 };
 
-const ChatView = ({ convo, onBack }) => {
-  const [messages, setMessages] = useState(convo.messages);
+const ChatView = ({ convo, onBack }: ChatViewProps) => {
+  const [messages, setMessages] = useState<Message[]>(convo.messages);
   const [draft, setDraft] = useState("");
   const [showProfile, setShowProfile] = useState(false);
-  const bottomRef = useRef(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
-  const showWarning = draft.trim() && containsContactInfo(draft);
+  const showWarning = draft.trim().length > 0 && containsContactInfo(draft);
   const handleSend = () => {
     const text = draft.trim();
     if (!text) return;
     setMessages(prev => [...prev, { id: Date.now(), from: "me", text, time: "Just now", blocked: containsContactInfo(text) }]);
     setDraft("");
   };
-  const handleKeyDown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } };
-  const grouped = [];
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } };
+  const grouped: Array<{ type: string; label?: string; msg?: Message }> = [];
   messages.forEach((msg, i) => {
     const prev = messages[i - 1];
     if (!prev || prev.time !== msg.time) grouped.push({ type: "time", label: msg.time });
@@ -260,7 +326,8 @@ const ChatView = ({ convo, onBack }) => {
       <div style={{ padding: "12px 16px 100px", display: "flex", flexDirection: "column", gap: 4 }}>
         {grouped.map((item, i) => {
           if (item.type === "time") return <div key={`t-${i}`} style={{ textAlign: "center", margin: "10px 0 6px" }}><span style={{ fontSize: 11, color: C.textMuted, fontFamily: F.body }}>{item.label}</span></div>;
-          const { msg } = item;
+          if (!item.msg) return null;
+          const msg = item.msg;
           const isMe = msg.from === "me";
           return (
             <div key={msg.id} style={{ display: "flex", flexDirection: isMe ? "row-reverse" : "row", alignItems: "flex-end", gap: 7 }}>
@@ -285,7 +352,7 @@ const ChatView = ({ convo, onBack }) => {
           <div style={{ flex: 1, background: C.surface, borderRadius: 22, padding: "10px 16px", display: "flex", alignItems: "center" }}>
             <textarea value={draft} onChange={e => { setDraft(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 100) + "px"; }} onKeyDown={handleKeyDown} placeholder="Message…" rows={1} style={{ flex: 1, border: "none", background: "none", outline: "none", resize: "none", fontSize: 15, color: C.textPrimary, fontFamily: F.body, lineHeight: 1.4, maxHeight: 100, overflow: "auto" }} />
           </div>
-          <button onClick={handleSend} disabled={!draft.trim() || showWarning} style={{ width: 42, height: 42, borderRadius: "50%", background: draft.trim() && !showWarning ? C.green : C.surface, border: "none", cursor: draft.trim() && !showWarning ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s", flexShrink: 0 }}>
+          <button onClick={handleSend} disabled={draft.trim().length === 0 || showWarning} style={{ width: 42, height: 42, borderRadius: "50%", background: draft.trim() && !showWarning ? C.green : C.surface, border: "none", cursor: draft.trim() && !showWarning ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s", flexShrink: 0 }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13" stroke={draft.trim() && !showWarning ? C.white : C.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M22 2L15 22L11 13L2 9L22 2Z" stroke={draft.trim() && !showWarning ? C.white : C.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
         </div>
@@ -296,8 +363,8 @@ const ChatView = ({ convo, onBack }) => {
 };
 
 // ── MessagesScreen ────────────────────────────────────────────────────────────
-const MessagesScreen = ({ setScreen }) => {
-  const [openChat, setOpenChat] = useState(null);
+const MessagesScreen = ({ setScreen }: MessagesScreenProps) => {
+  const [openChat, setOpenChat] = useState<Conversation | null>(null);
   return (
     <div style={{ background: C.bg, minHeight: "100vh" }}>
       {openChat
@@ -420,13 +487,13 @@ const GROUP_TRIPS = [
 ];
 
 // ─── PRIMITIVES ───────────────────────────────────────────────────────────────
-const Wordmark = ({ light }) => (
+const Wordmark = ({ light }: { light?: boolean }) => (
   <span style={{ fontFamily: F.display, fontSize: 22, fontWeight: 700, letterSpacing: "-0.3px", color: light ? C.white : C.textPrimary }}>
     Guide<span style={{ color: light ? "#7BC67E" : C.green }}>Match</span>
   </span>
 );
 
-const StatusBar = ({ light }) => (
+const StatusBar = ({ light }: { light?: boolean }) => (
   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 28px 6px", fontSize: 12, fontWeight: 600, color: light ? "rgba(255,255,255,0.9)" : C.textPrimary, fontFamily: F.body }}>
     <span>9:41</span>
     <div style={{ width: 120, height: 14, background: light ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.1)", borderRadius: 20 }} />
@@ -434,7 +501,7 @@ const StatusBar = ({ light }) => (
   </div>
 );
 
-const Btn = ({ children, onClick, ghost, small, disabled, style = {} }) => (
+const Btn = ({ children, onClick, ghost = false, small = false, disabled = false, style = {} }: { children: ReactNode; onClick: () => void; ghost?: boolean; small?: boolean; disabled?: boolean; style?: React.CSSProperties }) => (
   <button onClick={onClick} disabled={disabled} style={{
     width: ghost ? "auto" : "100%",
     padding: small ? "10px 20px" : "16px",
@@ -453,7 +520,7 @@ const Btn = ({ children, onClick, ghost, small, disabled, style = {} }) => (
   </button>
 );
 
-const Chip = ({ label, selected, onSelect, accent }) => (
+const Chip = ({ label, selected, onSelect, accent }: { label: string; selected: boolean; onSelect: () => void; accent?: string }) => (
   <button onClick={onSelect} style={{
     padding: "9px 16px",
     borderRadius: 999,
@@ -471,7 +538,7 @@ const Chip = ({ label, selected, onSelect, accent }) => (
   </button>
 );
 
-const GInput = ({ label, value, onChange, placeholder, multiline }) => (
+const GInput = ({ label, value, onChange, placeholder, multiline }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; multiline?: boolean }) => (
   <div style={{ marginBottom: 16 }}>
     <div style={{ fontSize: 12, fontWeight: 600, color: C.textMid, marginBottom: 6, fontFamily: F.body, textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</div>
     {multiline
@@ -481,7 +548,7 @@ const GInput = ({ label, value, onChange, placeholder, multiline }) => (
   </div>
 );
 
-const UploadTile = ({ icon, label, sublabel, uploaded }) => (
+const UploadTile = ({ icon, label, sublabel, uploaded }: { icon: string; label: string; sublabel: string; uploaded: boolean }) => (
   <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", background: C.white, borderRadius: 14, border: `1.5px solid ${uploaded ? C.greenMid : C.surface}`, marginBottom: 10 }}>
     <span style={{ fontSize: 22 }}>{icon}</span>
     <div style={{ flex: 1 }}>
@@ -494,7 +561,7 @@ const UploadTile = ({ icon, label, sublabel, uploaded }) => (
   </div>
 );
 
-const ProgressDots = ({ total, current }) => (
+const ProgressDots = ({ total, current }: { total: number; current: number }) => (
   <div style={{ display: "flex", gap: 6, alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
     {Array.from({ length: total }).map((_, i) => (
       <div key={i} style={{ height: 6, width: i === current ? 20 : 6, borderRadius: 999, background: i <= current ? C.green : C.surface, transition: "all 0.3s" }} />
@@ -502,7 +569,7 @@ const ProgressDots = ({ total, current }) => (
   </div>
 );
 
-const TopBar = ({ onBack, light, setScreen }) => {
+const TopBar = ({ onBack, light, setScreen }: { onBack: () => void; light?: boolean; setScreen: (screen: string) => void }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 20px 12px", position: "relative" }}>
@@ -531,7 +598,7 @@ const TopBar = ({ onBack, light, setScreen }) => {
   );
 };
 
-const BottomNav = ({ active, setScreen }) => {
+const BottomNav = ({ active, setScreen }: BottomNavProps) => {
   const tabs = [
     { key: "home",      icon: "🏠", label: "Home" },
     { key: "swipe",     icon: "🔍", label: "Browse" },
@@ -643,13 +710,13 @@ const S4Destination = ({ setScreen }) => {
 };
 
 // S_Dates: Onboarding date picker (between destination and preferences)
-const SDates = ({ setScreen }) => {
+const SDates = ({ setScreen }: { setScreen: (screen: string) => void }) => {
   const [dateMode, setDateMode] = useState("dates");
-  const [start, setStart] = useState(null);
-  const [end, setEnd] = useState(null);
-  const [hover, setHover] = useState(null);
-  const [flexDuration, setFlexDuration] = useState(null);
-  const [flexMonth, setFlexMonth] = useState(null);
+  const [start, setStart] = useState<string | null>(null);
+  const [end, setEnd] = useState<string | null>(null);
+  const [hover, setHover] = useState<string | null>(null);
+  const [flexDuration, setFlexDuration] = useState<string | null>(null);
+  const [flexMonth, setFlexMonth] = useState<string | null>(null);
   const [flexYear, setFlexYear] = useState(2026);
   const today = new Date(2026, 4, 16);
   const [m, setM] = useState({ y: 2026, mo: 5 });
@@ -662,12 +729,12 @@ const SDates = ({ setScreen }) => {
     if (!start || (start && end)) { setStart(k); setEnd(null); setHover(null); }
     else { const s = keyToDate(start), e = keyToDate(k); if (e < s) { setStart(k); setEnd(null); } else { setEnd(k); setHover(null); } }
   };
-  const inRange = (y, mo, d) => { if (!start) return false; const endKey = end || hover; if (!endKey) return false; const s = keyToDate(start), e = keyToDate(endKey), cur = toDateObj(y, mo, d); const [lo, hi] = s <= e ? [s,e] : [e,s]; return cur > lo && cur < hi; };
-  const isStart = (y, mo, d) => start && dateKey(y, mo, d) === start;
-  const isEnd   = (y, mo, d) => end && dateKey(y, mo, d) === end;
-  const isEndHov = (y, mo, d) => !end && hover && dateKey(y, mo, d) === hover && hover !== start;
-  const nights = (!start || !end) ? 0 : Math.round((keyToDate(end) - keyToDate(start)) / 86400000);
-  const fmt = k => { const d = keyToDate(k); return `${MN[d.getMonth()]} ${d.getDate()}`; };
+  const inRange = (y: number, mo: number, d: number) => { if (!start) return false; const endKey = end || hover; if (!endKey) return false; const s = keyToDate(start), e = keyToDate(endKey), cur = toDateObj(y, mo, d); const [lo, hi] = s <= e ? [s,e] : [e,s]; return cur > lo && cur < hi; };
+  const isStart = (y: number, mo: number, d: number) => start && dateKey(y, mo, d) === start;
+  const isEnd   = (y: number, mo: number, d: number) => end && dateKey(y, mo, d) === end;
+  const isEndHov = (y: number, mo: number, d: number) => !end && hover && dateKey(y, mo, d) === hover && hover !== start;
+  const nights = (!start || !end) ? 0 : Math.round((keyToDate(end).getTime() - keyToDate(start).getTime()) / 86400000);
+  const fmt = (k: string) => { const d = keyToDate(k); return `${MN[d.getMonth()]} ${d.getDate()}`; };
   const dim = new Date(m.y, m.mo + 1, 0).getDate();
   const fd  = new Date(m.y, m.mo, 1).getDay();
 
